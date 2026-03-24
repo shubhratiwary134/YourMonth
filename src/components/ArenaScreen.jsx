@@ -54,9 +54,9 @@ export default function ArenaScreen({ roomCode, myRole, roomData }) {
   const round2StartedAt = roomData?.rounds?.round2?.startedAt || null
   const round3StartedAt = roomData?.rounds?.round3?.startedAt || null
 
-  const timer1 = useTimer(round1StartedAt, 2)
-  const timer2 = useTimer(round2StartedAt,  2)
-  const timer3 = useTimer(round3StartedAt,  2)
+  const timer1 = useTimer(round1StartedAt, 45)
+  const timer2 = useTimer(round2StartedAt, 45)
+  const timer3 = useTimer(round3StartedAt, 45)
 
   const p1IsMyTurn = currentRound === 1 || currentRound === 3
   const p2IsMyTurn = currentRound === 2 || currentRound === 3
