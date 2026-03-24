@@ -4,6 +4,9 @@ import HomeScreen    from './components/HomeScreen'
 import WaitingScreen from './components/WaitingScreen'
 import JoinedScreen  from './components/JoinedScreen'
 import ArenaScreen   from './components/ArenaScreen'
+import ResultScreen  from './components/ResultScreen'
+import { ref, update } from 'firebase/database'
+import { db } from './hooks/useRoom'
 
 // Valid screen values: 'home' | 'waiting' | 'joined' | 'arena'
 export default function App() {
@@ -27,12 +30,29 @@ export default function App() {
     setCurrentScreen('home')
   }, [cancelRoom])
 
-  // ── Auto-transition to Arena when ready ─────────────────────────────
+  const handlePlayAgain = async () => {
+    if (!roomCode) return
+    await update(ref(db, `rooms/${roomCode}`), {
+      status: "reveal",
+      currentRound: null,
+      result: null,
+      transcripts: null,
+      rounds: null,
+      timer: null,
+      "player1/pokemon": null,
+      "player1/ready": null,
+      "player2/pokemon": null,
+      "player2/ready": null,
+    })
+  }
+
+  // ── Auto-transition between Arena and Result ────────────────────────
   useEffect(() => {
-    if (roomData?.status === 'ready') {
-      setCurrentScreen('arena')
+    if (roomData?.status) {
+      if (roomData.status === 'result') setCurrentScreen('result')
+      else if (['ready', 'reveal', 'debate', 'judging'].includes(roomData.status)) setCurrentScreen('arena')
     }
-  }, [roomData])
+  }, [roomData?.status])
 
   /* ── Screen renderer ───────────────────────────────────────────────── */
   const screens = {
@@ -40,6 +60,7 @@ export default function App() {
     waiting: <WaitingScreen roomCode={roomCode} onCancel={handleCancel} />,
     joined:  <JoinedScreen  roomCode={roomCode} />,
     arena:   <ArenaScreen   roomCode={roomCode} myRole={myRole} roomData={roomData} />,
+    result:  <ResultScreen  result={roomData?.result} player1Pokemon={roomData?.player1?.pokemon} player2Pokemon={roomData?.player2?.pokemon} myRole={myRole} onPlayAgain={handlePlayAgain} />,
   }
 
   return (

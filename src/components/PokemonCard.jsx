@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const TYPE_COLORS = {
+export const TYPE_COLORS = {
   fire:     '#ff9741',
   water:    '#4fc3f7',
   grass:    '#78c850',
@@ -136,20 +136,25 @@ export default function PokemonCard({ isRevealed, pokemon, playerColor }) {
           {pokemon && (
             <>
               {/* Top Section (40%) */}
-              <div style={{ height: '40%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '1rem' }}>
-                <div style={{
-                  background: hexToRgba(typeColor, 0.2),
-                  border: `1px solid ${hexToRgba(typeColor, 0.6)}`,
-                  color: typeColor,
-                  padding: '0.2rem 1rem',
-                  borderRadius: '999px',
-                  fontSize: '0.65rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase'
-                }}>
-                  {pokemon.type}
-                </div>
+              <div style={{ height: '40%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '1rem', gap: '0.4rem' }}>
+                {(pokemon.types || [pokemon.type]).map(tName => {
+                  const tColor = TYPE_COLORS[tName.toLowerCase()] || TYPE_COLORS.normal
+                  return (
+                    <div key={tName} style={{
+                      background: hexToRgba(tColor, 0.2),
+                      border: `1px solid ${hexToRgba(tColor, 0.6)}`,
+                      color: tColor,
+                      padding: '0.2rem 0.8rem',
+                      borderRadius: '999px',
+                      fontSize: '0.6rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase'
+                    }}>
+                      {tName}
+                    </div>
+                  )
+                })}
               </div>
 
               {/* Middle Section (40%) */}
