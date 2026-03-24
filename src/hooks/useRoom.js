@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { ref, set, get, remove } from 'firebase/database'
+import { useState, useCallback, useEffect } from 'react'
+import { ref, set, get, remove, onValue, update } from 'firebase/database'
 import { db } from '../firebase'
 
 const WORDS = ['FIRE', 'BOLT', 'NOVA', 'IRON', 'STORM', 'BLAZE', 'FROST', 'VOID', 'APEX', 'FLUX']
@@ -11,8 +11,22 @@ function generateCode() {
 export function useRoom() {
   const [myRole,   setMyRole]   = useState(null)   // 'player1' | 'player2'
   const [roomCode, setRoomCode] = useState(null)
+  const [roomData, setRoomData] = useState(null)
   const [error,    setError]    = useState(null)
   const [loading,  setLoading]  = useState(false)
+
+  // ── Real-time Sync ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!roomCode) {
+      setRoomData(null)
+      return
+    }
+    const roomRef = ref(db, `rooms/${roomCode}`)
+    const unsub = onValue(roomRef, (snapshot) => {
+      setRoomData(snapshot.val())
+    })
+    return () => unsub()
+  }, [roomCode])
 
   // ── Create Room ──────────────────────────────────────────────────────
   const createRoom = useCallback(async () => {
@@ -90,5 +104,7 @@ export function useRoom() {
     }
   }, [roomCode])
 
-  return { myRole, roomCode, error, loading, createRoom, joinRoom, cancelRoom }
+  return { myRole, roomCode, roomData, error, loading, createRoom, joinRoom, cancelRoom }
 }
+
+export { db }

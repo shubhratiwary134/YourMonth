@@ -1,13 +1,14 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRoom } from './hooks/useRoom'
-import HomeScreen   from './components/HomeScreen'
+import HomeScreen    from './components/HomeScreen'
 import WaitingScreen from './components/WaitingScreen'
 import JoinedScreen  from './components/JoinedScreen'
+import ArenaScreen   from './components/ArenaScreen'
 
 // Valid screen values: 'home' | 'waiting' | 'joined' | 'arena'
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home')
-  const { myRole, roomCode, loading, createRoom, joinRoom, cancelRoom } = useRoom()
+  const { myRole, roomCode, roomData, loading, createRoom, joinRoom, cancelRoom } = useRoom()
 
   /* ── Screen transitions ────────────────────────────────────────────── */
   const handleCreateRoom = useCallback(async () => {
@@ -26,11 +27,19 @@ export default function App() {
     setCurrentScreen('home')
   }, [cancelRoom])
 
+  // ── Auto-transition to Arena when ready ─────────────────────────────
+  useEffect(() => {
+    if (roomData?.status === 'ready') {
+      setCurrentScreen('arena')
+    }
+  }, [roomData])
+
   /* ── Screen renderer ───────────────────────────────────────────────── */
   const screens = {
     home:    <HomeScreen    onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} loading={loading} />,
     waiting: <WaitingScreen roomCode={roomCode} onCancel={handleCancel} />,
     joined:  <JoinedScreen  roomCode={roomCode} />,
+    arena:   <ArenaScreen   roomCode={roomCode} myRole={myRole} roomData={roomData} />,
   }
 
   return (

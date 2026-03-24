@@ -6,8 +6,6 @@ export default {
   ],
   theme: {
     extend: {
-      // Map Debattle CSS variables into Tailwind so you can use
-      // e.g. bg-surface, text-primary etc. if desired.
       colors: {
         surface:           'var(--surface)',
         'surface-low':     'var(--surface-low)',
