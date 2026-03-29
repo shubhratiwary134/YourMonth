@@ -41,10 +41,11 @@ const useSpeechRecognition = () => {
     }
 
     recognition.onerror = (event) => {
-      if (event.error === 'no-speech' || event.error === 'aborted') return
+      // Ignore transient or benign errors so they silently retry
+      if (['no-speech', 'aborted', 'network'].includes(event.error)) return
       
       // Don't restart on fatal errors
-      if (['network', 'not-allowed', 'service-not-allowed'].includes(event.error)) {
+      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
         if (recognitionRef.current) {
           recognitionRef.current.shouldRestart = false
         }
