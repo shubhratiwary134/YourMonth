@@ -7,14 +7,29 @@ const useSpeechRecognition = () => {
   
   const recognitionRef = useRef(null)
   const shouldRestartRef = useRef(false)
-  const prevTranscriptRef = useRef('') 
-  const currentFinalRef = useRef('')   
+  
+  // Track historical finalized text when the native results array gets purged
+  const historyRef = useRef('')       
+  // Track the most recent final string built from the current results array
+  const currentFinalRef = useRef('')  
+  // Track the highest index we saw so we know if the browser clears the results array
+  const highestLengthRef = useRef(0)
 
   const startListening = useCallback(() => {
-    if (recognitionRef.current) return
+    // If instance exists, just try to start it quietly (prevents Android perm blocks)
+    if (recognitionRef.current) {
+      shouldRestartRef.current = true
+      try {
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch (e) {
+        if (e.name === 'InvalidStateError') setIsListening(true) // Already active
+      }
+      return
+    }
 
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      setError("Your browser doesn't support voice recognition. Use Chrome or Edge.")
+      setError("Your browser doesn't support voice recognition.")
       return
     }
 
@@ -22,7 +37,6 @@ const useSpeechRecognition = () => {
     const recognition = new SpeechRecognition()
     recognitionRef.current = recognition
     shouldRestartRef.current = true
-    currentFinalRef.current = ''
 
     recognition.continuous = true
     recognition.interimResults = true
@@ -30,46 +44,51 @@ const useSpeechRecognition = () => {
     recognition.maxAlternatives = 1
 
     recognition.onresult = (event) => {
+      // If the browser cleared the results array (e.g. upon restart), 
+      // commit our last known final text into history.
+      if (event.results.length < highestLengthRef.current) {
+        historyRef.current += currentFinalRef.current
+        currentFinalRef.current = ''
+      }
+      highestLengthRef.current = event.results.length
+
       let finalStr = ''
       let interimStr = ''
 
-      // Always iterate exactly over the current results chunk available
+      // Always rebuild the complete string from the provided array to defeat resultIndex bugs
       for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          finalStr += result[0].transcript + ' '
+        if (event.results[i].isFinal) {
+          finalStr += event.results[i][0].transcript + ' '
         } else {
-          interimStr += result[0].transcript
+          interimStr += event.results[i][0].transcript
         }
       }
 
       currentFinalRef.current = finalStr
-      setTranscript(prevTranscriptRef.current + finalStr + interimStr)
+      setTranscript(historyRef.current + finalStr + interimStr)
     }
 
     recognition.onerror = (event) => {
-      // Ignore transient or benign errors so they silently retry
       if (['no-speech', 'aborted', 'network'].includes(event.error)) return
-      
-      // Don't restart on fatal errors
       if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
         shouldRestartRef.current = false
       }
-
       setError(`Mic error: ${event.error}`)
     }
 
     recognition.onend = () => {
-      // Commit this session's final text before destroying the instance
-      prevTranscriptRef.current += currentFinalRef.current
-      currentFinalRef.current = ''
-      
-      recognitionRef.current = null
       setIsListening(false)
-
-      // Restart seamlessly if intended
-      if (shouldRestartRef.current) {
-        startListening()
+      // If we're supposed to stay alive, restart the existing instance
+      if (shouldRestartRef.current && recognitionRef.current) {
+        // Small timeout helps prevent Android from suppressing aggressive auto-restarts
+        setTimeout(() => {
+          if (shouldRestartRef.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.start()
+              setIsListening(true)
+            } catch (e) {}
+          }
+        }, 200)
       }
     }
 
@@ -78,25 +97,28 @@ const useSpeechRecognition = () => {
       setIsListening(true)
       setError(null)
     } catch (e) {
-      console.error("Failed to start recognition:", e)
-      shouldRestartRef.current = false
-      recognitionRef.current = null
-      setError(`Start failed: ${e.message}`)
-      setIsListening(false)
+      if (e.name === 'InvalidStateError') {
+        setIsListening(true)
+      } else {
+        shouldRestartRef.current = false
+        setError(`Start failed: ${e.message}`)
+        setIsListening(false)
+      }
     }
   }, [])
 
   const stopListening = useCallback(() => {
     shouldRestartRef.current = false
     if (recognitionRef.current) {
-      recognitionRef.current.stop()
+      try { recognitionRef.current.stop() } catch (e) {}
     }
     setIsListening(false)
   }, [])
 
   const resetTranscript = useCallback(() => {
-    prevTranscriptRef.current = ''
+    historyRef.current = ''
     currentFinalRef.current = ''
+    highestLengthRef.current = 0
     setTranscript('')
   }, [])
 
