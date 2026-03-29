@@ -1,13 +1,17 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 
 const useSpeechRecognition = () => {
   const [transcript, setTranscript] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState(null)
+  
   const recognitionRef = useRef(null)
+  const shouldRestartRef = useRef(false)
+  const prevTranscriptRef = useRef('') 
+  const currentFinalRef = useRef('')   
 
-  const startListening = () => {
-    if (isListening || recognitionRef.current) return
+  const startListening = useCallback(() => {
+    if (recognitionRef.current) return
 
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setError("Your browser doesn't support voice recognition. Use Chrome or Edge.")
@@ -17,27 +21,30 @@ const useSpeechRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const recognition = new SpeechRecognition()
     recognitionRef.current = recognition
+    shouldRestartRef.current = true
+    currentFinalRef.current = ''
 
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'en-US'
     recognition.maxAlternatives = 1
 
-    let finalTranscript = ''
-
     recognition.onresult = (event) => {
-      let interimTranscript = ''
+      let finalStr = ''
+      let interimStr = ''
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      // Always iterate exactly over the current results chunk available
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i]
         if (result.isFinal) {
-          finalTranscript += result[0].transcript + ' '
+          finalStr += result[0].transcript + ' '
         } else {
-          interimTranscript += result[0].transcript
+          interimStr += result[0].transcript
         }
       }
 
-      setTranscript(finalTranscript + interimTranscript)
+      currentFinalRef.current = finalStr
+      setTranscript(prevTranscriptRef.current + finalStr + interimStr)
     }
 
     recognition.onerror = (event) => {
@@ -46,53 +53,52 @@ const useSpeechRecognition = () => {
       
       // Don't restart on fatal errors
       if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
-        if (recognitionRef.current) {
-          recognitionRef.current.shouldRestart = false
-        }
+        shouldRestartRef.current = false
       }
 
       setError(`Mic error: ${event.error}`)
-      setIsListening(false)
     }
 
     recognition.onend = () => {
-      if (recognitionRef.current?.shouldRestart) {
-        try {
-          recognition.start()
-          setIsListening(true)
-        } catch (e) {
-          console.error("Failed to restart recognition:", e)
-          setIsListening(false)
-        }
-      } else {
-        setIsListening(false)
+      // Commit this session's final text before destroying the instance
+      prevTranscriptRef.current += currentFinalRef.current
+      currentFinalRef.current = ''
+      
+      recognitionRef.current = null
+      setIsListening(false)
+
+      // Restart seamlessly if intended
+      if (shouldRestartRef.current) {
+        startListening()
       }
     }
 
-    recognition.shouldRestart = true
     try {
       recognition.start()
       setIsListening(true)
       setError(null)
     } catch (e) {
       console.error("Failed to start recognition:", e)
+      shouldRestartRef.current = false
+      recognitionRef.current = null
       setError(`Start failed: ${e.message}`)
       setIsListening(false)
     }
-  }
+  }, [])
 
-  const stopListening = () => {
+  const stopListening = useCallback(() => {
+    shouldRestartRef.current = false
     if (recognitionRef.current) {
-      recognitionRef.current.shouldRestart = false
       recognitionRef.current.stop()
-      recognitionRef.current = null
     }
     setIsListening(false)
-  }
+  }, [])
 
-  const resetTranscript = () => {
+  const resetTranscript = useCallback(() => {
+    prevTranscriptRef.current = ''
+    currentFinalRef.current = ''
     setTranscript('')
-  }
+  }, [])
 
   return { transcript, isListening, error, startListening, stopListening, resetTranscript }
 }
