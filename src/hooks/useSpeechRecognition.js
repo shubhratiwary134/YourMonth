@@ -7,6 +7,8 @@ const useSpeechRecognition = () => {
   const recognitionRef = useRef(null)
 
   const startListening = () => {
+    if (isListening || recognitionRef.current) return
+
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setError("Your browser doesn't support voice recognition. Use Chrome or Edge.")
       return
@@ -40,22 +42,42 @@ const useSpeechRecognition = () => {
 
     recognition.onerror = (event) => {
       if (event.error === 'no-speech') return
+      
+      // Don't restart on fatal errors
+      if (['network', 'not-allowed', 'service-not-allowed'].includes(event.error)) {
+        if (recognitionRef.current) {
+          recognitionRef.current.shouldRestart = false
+        }
+      }
+
       setError(`Mic error: ${event.error}`)
       setIsListening(false)
     }
 
     recognition.onend = () => {
       if (recognitionRef.current?.shouldRestart) {
-        recognition.start()
+        try {
+          recognition.start()
+          setIsListening(true)
+        } catch (e) {
+          console.error("Failed to restart recognition:", e)
+          setIsListening(false)
+        }
       } else {
         setIsListening(false)
       }
     }
 
     recognition.shouldRestart = true
-    recognition.start()
-    setIsListening(true)
-    setError(null)
+    try {
+      recognition.start()
+      setIsListening(true)
+      setError(null)
+    } catch (e) {
+      console.error("Failed to start recognition:", e)
+      setError(`Start failed: ${e.message}`)
+      setIsListening(false)
+    }
   }
 
   const stopListening = () => {

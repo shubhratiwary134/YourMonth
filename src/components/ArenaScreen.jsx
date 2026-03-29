@@ -246,12 +246,22 @@ export default function ArenaScreen({ roomCode, myRole, roomData }) {
   useEffect(() => {
     if (!currentRound) return
     const activeTimer = currentRound === 1 ? timer1 : currentRound === 2 ? timer2 : currentRound === 3 ? timer3 : null
+    
+    // If we're waiting for the countdown, make sure we're stopped
     if (activeTimer && activeTimer.timeUntilStart > 0) {
       stopRound()
       return
     }
-    startRound(currentRound)
-  }, [currentRound, timer1.timeUntilStart, timer2.timeUntilStart, timer3.timeUntilStart])
+
+    // Only start if we're not already listening for the active player
+    const isAlreadyListening = (currentRound === 1 && p1Speech.isListening) || 
+                                (currentRound === 2 && p2Speech.isListening) ||
+                                (currentRound === 3 && (p1Speech.isListening || p2Speech.isListening))
+
+    if (!isAlreadyListening) {
+      startRound(currentRound)
+    }
+  }, [currentRound, timer1.timeUntilStart > 0, timer2.timeUntilStart > 0, timer3.timeUntilStart > 0])
 
   // ── Gemini Judging Logic ───────────────────────────────────────────────
 
