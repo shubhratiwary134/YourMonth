@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { ref, set, get, remove, onValue, update } from 'firebase/database'
+import { ref, set, get, remove, onValue, update, onDisconnect } from 'firebase/database'
 import { db } from '../firebase'
 
 const WORDS = ['FIRE', 'BOLT', 'NOVA', 'IRON', 'STORM', 'BLAZE', 'FROST', 'VOID', 'APEX', 'FLUX']
@@ -34,11 +34,17 @@ export function useRoom() {
     setLoading(true)
     setError(null)
     try {
-      await Promise.all([
-        set(ref(db, `rooms/${code}/status`),         'waiting'),
-        set(ref(db, `rooms/${code}/player1/joined`), true),
-        set(ref(db, `rooms/${code}/createdAt`),      Date.now()),
-      ])
+      const roomRef = ref(db, `rooms/${code}`)
+      // Overwrite the entire room payload to clear any old data
+      await set(roomRef, {
+        status: 'waiting',
+        player1: { joined: true },
+        createdAt: Date.now()
+      })
+      
+      // Clean up room if this client disconnects unnecessarily
+      onDisconnect(roomRef).remove()
+
       setMyRole('player1')
       setRoomCode(code)
       return { success: true, code }
@@ -61,7 +67,8 @@ export function useRoom() {
     setLoading(true)
     setError(null)
     try {
-      const snap = await get(ref(db, `rooms/${code}`))
+      const roomRef = ref(db, `rooms/${code}`)
+      const snap = await get(roomRef)
 
       if (!snap.exists()) {
         return { success: false, error: 'Room not found. Check your code.' }
@@ -72,10 +79,12 @@ export function useRoom() {
         return { success: false, error: 'Room is full or already in progress.' }
       }
 
-      await Promise.all([
-        set(ref(db, `rooms/${code}/player2/joined`), true),
-        set(ref(db, `rooms/${code}/status`),         'ready'),
-      ])
+      await update(roomRef, {
+        'player2/joined': true,
+        status: 'ready'
+      })
+      
+      onDisconnect(roomRef).remove()
 
       setMyRole('player2')
       setRoomCode(code)
@@ -93,7 +102,11 @@ export function useRoom() {
     const target = code || roomCode
     setLoading(true)
     try {
-      if (target) await remove(ref(db, `rooms/${target}`))
+      if (target) {
+        const roomRef = ref(db, `rooms/${target}`)
+        await remove(roomRef)
+        onDisconnect(roomRef).cancel() // Cancel the disconnect handler if manually removed
+      }
     } catch (err) {
       console.error('Cancel failed:', err)
     } finally {

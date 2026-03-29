@@ -41,7 +41,7 @@ const useSpeechRecognition = () => {
     }
 
     recognition.onerror = (event) => {
-      if (event.error === 'no-speech') return
+      if (event.error === 'no-speech' || event.error === 'aborted') return
       
       // Don't restart on fatal errors
       if (['network', 'not-allowed', 'service-not-allowed'].includes(event.error)) {
